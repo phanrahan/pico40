@@ -1,2 +1,4 @@
-# pico40
-ice40 processor modeled after the picoblaze
+## pico
+
+pico is the magma implementation of Ken Chapman's picoblaze processor
+
