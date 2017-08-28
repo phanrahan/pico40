@@ -1,8 +1,5 @@
-import sys
-from magma import *
-from pico.asm import *
-from pico.cpu import MAXINSTS
-from setup import makepico
+from pico40.asm import *
+from setup import makepicoicestick
 
 def prog():
     ldlo(r0,0)
@@ -17,6 +14,4 @@ def prog():
     st(r1, 0)
     jmp(loop0)
 
-main = makepico(prog)
-
-compile(sys.argv[1], main)
+main = makepicoicestick(prog, 8, 8)

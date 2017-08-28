@@ -1,7 +1,5 @@
-import sys
-from magma import *
-from pico.asm import *
-from setup import makepico
+from pico40.asm import *
+from setup import makepicoicestick
 
 def prog():
     ldlo(r0, 1)
@@ -10,6 +8,5 @@ def prog():
     st(r1,0)
     jmp(0)
 
-main = makepico(prog)
+main = makepicoicestick(prog, 8, 8)
 
-compile(sys.argv[1], main)

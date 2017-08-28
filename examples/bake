@@ -1,11 +1,20 @@
 #!/usr/bin/env python
-import os, glob
-from os.path import join, exists
+import glob
 from fabricate import main, autoclean, run
 
-BUILD = 'build'
+BOARD = 'icestick'
 
-tests = glob.glob('*.py')
+#tests = glob.glob('*.py')
+#tests = ['out.py']
+#tests = ['inout.py']
+#tests = ['mov.py']
+#tests = ['and.py']
+#tests = ['or.py']
+#tests = ['xor.py']
+#tests = ['add.py']
+#tests = ['sub.py']
+#tests = ['count.py']
+tests = ['blink.py']
 
 def build():
     for test in tests:
@@ -16,7 +25,7 @@ def build():
         compile(base)
 
 def compile(base):
-    run('python',base+'.py', join(BUILD,base))
+    run('magma','-b',BOARD,base)
 
 def clean():
     autoclean()

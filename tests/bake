@@ -1,0 +1,17 @@
+#!/usr/bin/env python
+from fabricate import main, autoclean, run
+
+BOARD = 'icestick'
+
+def build():
+    #compile('test_seq')
+    #compile('test_logic')
+    compile('test_arith')
+
+def compile(base):
+    run('magma','-b',BOARD,base)
+
+def clean():
+    autoclean()
+
+main()

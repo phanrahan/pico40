@@ -2,10 +2,8 @@ from pico40.asm import *
 from setup import makepicoicestick
 
 def prog():
-    ldlo(r0, 0b01010101)
-    ldlo(r1, 0b00001111)
-    xor(r1, r0)
-    st(r1, 0)
+    ldlo(r0, 0x55)
+    st(r0, 0)
     jmp(0)
 
 main = makepicoicestick(prog, 8, 8)

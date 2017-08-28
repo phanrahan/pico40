@@ -1,0 +1,9 @@
+{
+    ".deps_version": 2, 
+    "magma -b icestick test_arith": {
+        "__pycache__/test_arith.cpython-36.pyc": "output-39deffe8b2595bd198905bbf34d7e291", 
+        "build/test_arith.pcf": "output-6471d5ada623cff8a97bcbe9b83ba6cb", 
+        "build/test_arith.v": "output-8dac4ef2d073cf450bcafdbe01231a14", 
+        "test_arith.py": "input-d9db26e1518460e7d78edd1383b073f3"
+    }
+}
