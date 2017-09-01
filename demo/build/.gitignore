@@ -1,0 +1,15 @@
+*.xrpt
+*.html
+*.xml
+*.txt
+*.csv
+*.log
+*.ncd
+test.bgn
+test.drc
+test.route.pad
+test.route.par
+test.route.ptwx
+test.route.unroutes
+test.route.xpi
+test_bitgen.xwbt
