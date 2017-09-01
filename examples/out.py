@@ -1,5 +1,5 @@
 from pico40.asm import *
-from pico40pico40..setup import makepicoicestick
+from pico40.setup import makepicoicestick
 
 def prog():
     ldlo(r0, 0x55)

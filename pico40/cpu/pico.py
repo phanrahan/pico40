@@ -17,26 +17,72 @@ INSTN = 16
 #N = DATAN
 
 
-def instructiondecode(inst):
-    insttype = inst[14:16]
+class InstructionDecoder(Circuit):
+    IO = ['inst',      In(Bits(16)),
+          'phase',     In(Bit),
+          'z',         In(Bit),
 
-    # alu instructions
-    logicinst = ROM2((1 << 0))(insttype)
-    arithinst = ROM2((1 << 1))(insttype)
-    aluinst =  ROM2((1 << 0) | (1 << 1))(insttype)
+          'arith',     Out(Bit),
+          'ioimm',     Out(Bit),
+          'ld',        Out(Bit),
+          'jump',      Out(Bit),
+          'regwr',     Out(Bit),
+          'zwr',       Out(Bit),
+          #'cwr',       Out(Bit),
+          'owr',       Out(Bit)]
+    @classmethod
+    def definition(io):
+        inst = io.inst
+        phase = io.phase
+        z = io.z
 
-    # ld and st (immediate)
-    ldloinst = ROM4(1 << 8)(inst[12:16])
-    ldinst = ROM4(1 << 10)(inst[12:16])
-    stinst = ROM4(1 << 11)(inst[12:16])
+        insttype = inst[14:16]
+        #fullinsttype = inst[12:14]
+        cc = inst[8:12]
 
-    # control flow instructions
-    jumpinst = ROM4(1 << 12)(inst[12:16])
-    #callinst = ROM4(1 << 13)(inst[12:16])
+        # alu instructions
+        logicinst = ROM2((1 << 0))(insttype)
+        arithinst = ROM2((1 << 1))(insttype)
+        aluinst =   ROM2((1 << 0) | (1 << 1))(insttype)
 
-    return logicinst, arithinst, aluinst, \
-           ldloinst, ldinst, stinst, \
-           jumpinst
+        # ld and st (immediate)
+        ldloimminst = ROM4(1 << 8)(inst[12:16])
+        #ldhiimminst = ROM4(1 << 9)(inst[12:16])
+        ldinst =    ROM4(1 << 10)(inst[12:16])
+        stinst =    ROM4(1 << 11)(inst[12:16])
+        # make this a ROM
+        ld = Or(2)(ldinst, ldloimminst)
+
+        # control flow instructions
+        jumpinst = ROM4(1 << 12)(inst[12:16])
+        #callinst = ROM4(1 << 13)(inst[12:16])
+        #retinst = ROM4(1 << 14)(inst[12:16])
+
+        always = Decode(15, 4)(cc)
+
+        condz  = Decode(0, 4)(cc) #jz
+        condnz = Decode(1, 4)(cc) #jnz
+        jumpz = LUT3((I0&I2)|(I1&~I2))(condz, condnz, z)
+
+        # jump is jump always of jump cond 
+        cond = Or(2)(always, jumpz) 
+
+        jump = And(2)(jumpinst, cond)
+
+        regwr = LUT4((I0|I1|I2)&I3)(aluinst, ldloimminst, ldinst, phase)
+        zwr =  And(2)(aluinst, phase)
+        owr = And(2)(stinst, phase)
+
+        #wire(logicinst, io.logicinst)
+        wire(arithinst, io.arith)
+        #wire(aluinst, io.aluinst)
+        #wire(ldloinst, io.ldloinst)
+        wire(ldloimminst, io.ioimm)
+        wire(ld, io.ld)
+        wire(jump, io.jump)
+        wire(regwr, io.regwr)
+        wire(zwr, io.zwr)
+        wire(owr, io.owr)
 
 def DefinePico(ADDRN, DATAN, debug=False):
 
@@ -53,18 +99,7 @@ def DefinePico(ADDRN, DATAN, debug=False):
             "CLK",  In(Clock) )
 
     inst = pico.data
-
-    # instruction decode
-    addr = inst[0:ADDRN]
-    imm = inst[0:N]
-    rb = inst[4:8]
-    ra = inst[8:12]
-    cc = inst[8:12]
-    op = inst[12:14]
-
-    print('Building instruction decoder')
-    logicinst, arithinst, aluinst, ldloinst, ldinst, stinst, jumpinst =\
-        instructiondecode(inst)
+    I = pico.I
 
     # romb's output is registered
     # phase=0
@@ -73,51 +108,53 @@ def DefinePico(ADDRN, DATAN, debug=False):
     #   execute()
     phase = TFF()(1)
 
+    # instruction decode
+    addr = inst[0:ADDRN]
+    imm = inst[0:N]
+    rb = inst[4:8]
+    ra = inst[8:12]
+    op = inst[12:14]
+
+    print('Building condition code registers')
     z = DFF(has_ce=True)
-    condz = Decode(0, 4)(cc)  #jz
-    condnz = Decode(1, 4)(cc) #jnz
-    jumpz = LUT3((I0&I2)|(I1&~I2))(condz, condnz, z)
 
-    always = Decode(15, 4)(cc)
-
-    # jump is jump always of jump cond 
-    cond = Or(2)(always, jumpz) 
-    jump = And(2)(jumpinst, cond)
-
-    # register write
-    regwr = LUT4((I0|I1|I2)&I3)(aluinst, ldloinst, ldinst, phase)
+    print('Building instruction decoder')
+    arith, ioimm, ld, jump, \
+    regwr, zwr, owr = \
+        InstructionDecoder()(inst, phase, z)
 
     # sequencer
     print('Building sequencer')
     seq = Sequencer(ADDRN)  
     pc = seq(addr, jump, phase)
-    wire(pc, pico.addr)
-
-    regiomux = Mux(2, N)
-    regiomux(imm, pico.I, ldinst)
 
     print('Building register file')
-    regimux = Mux(2, N)
     regfile = DualRAM(4, N)
-    raval, rbval = regfile(ra, rb, ra, regimux, regwr)
+    raval = regfile.RDATA0
+    rbval = regfile.RDATA1
 
     print('Building ALU')
     alu = ALU(N)
-    res = alu(raval, rbval, op, arithinst)
+    res = alu(raval, rbval, op, arith)
 
-    ld = Or(2)(ldinst, ldloinst)
+    regiomux = Mux(2, N)
+    regiomux(I, imm, ioimm)  
+
+    regimux = Mux(2, N)
     regimux(res, regiomux, ld) 
 
+    regfile(ra, rb, ra, regimux, regwr)
+
     # z flag
-    zval = Decode(0, N)
-    zwr =  And(2)(aluinst, phase)
-    z(zval(res), CE=zwr)
 
-    owr = And(2)(stinst, phase)
-    wire(owr, pico.we)
+    zval0 = Decode(0, N//2)(res[0:N//2])
+    zval1 = Decode(0, N//2)(res[N//2:N])
+    z(And(2)(zval0,zval1), CE=zwr)
 
-    wire(raval, pico.O)
     wire(imm, pico.port)
+    wire(raval, pico.O)
+    wire(owr, pico.we)
+    wire(pc, pico.addr)
 
     EndCircuit()
 
