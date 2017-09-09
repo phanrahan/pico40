@@ -10,78 +10,98 @@ __all__ = ['Pico', 'DefinePico', 'INSTN']
 
 INSTN = 16
 
-#ADDRN = 8
-#MAXINSTS = 1 << ADDRN
-#
-#DATAN = 8
-#N = DATAN
+class Cond(Circuit):
+    IO = ["inst", In(Bits(4)), 
+          "cond", In(Bits(4)),
+          "z",    In(Bit),
+          "c",    In(Bit),
+          "jump", Out(Bit)]
+    @classmethod
+    def definition(io):
+        inst = io.inst
+        cond = io.cond
+        z = io.z
+        c = io.c
+
+        # control flow instructions
+        jumpinst = ROM4(1 << 12)(inst)
+        #callinst = ROM4(1 << 13)(inst)
+        #retinst = ROM4(1 << 14)(inst)
+
+        always = Decode(15, 4)(cond)
+
+        condz  = Decode(0, 4)(cond) #jz
+        condnz = Decode(1, 4)(cond) #jnz
+        jumpz = LUT3((I0&I2)|(I1&~I2))(condz, condnz, z)
+
+        condc  = Decode(2, 4)(cond) #jc
+        condnc = Decode(3, 4)(cond) #jnc
+        jumpc = LUT3((I0&I2)|(I1&~I2))(condc, condnc, c)
+
+        # jump is jump always of jump cond 
+        cond = Or(3)(always, jumpz, jumpc) 
+
+        jump = And(2)(jumpinst, cond)
+
+        wire(jump, io.jump)
 
 
 class InstructionDecoder(Circuit):
     IO = ['inst',      In(Bits(16)),
           'phase',     In(Bit),
           'z',         In(Bit),
+          'c',         In(Bit),
 
           'arith',     Out(Bit),
           'ioimm',     Out(Bit),
           'ld',        Out(Bit),
           'jump',      Out(Bit),
+
           'regwr',     Out(Bit),
           'zwr',       Out(Bit),
-          #'cwr',       Out(Bit),
+          'cwr',       Out(Bit),
           'owr',       Out(Bit)]
+
     @classmethod
     def definition(io):
         inst = io.inst
         phase = io.phase
         z = io.z
+        c = io.c
 
-        insttype = inst[14:16]
-        #fullinsttype = inst[12:14]
-        cc = inst[8:12]
+        cond = inst[8:12]
+        insttype = inst[12:16]
+        insttypeop = inst[14:16]
 
         # alu instructions
-        logicinst = ROM2((1 << 0))(insttype)
-        arithinst = ROM2((1 << 1))(insttype)
-        aluinst =   ROM2((1 << 0) | (1 << 1))(insttype)
+        #logicinst = ROM2((1 << 0))(insttypeop)
+        arithinst = ROM2((1 << 1))(insttypeop)
+        aluinst =   ROM2((1 << 0) | (1 << 1))(insttypeop)
 
         # ld and st (immediate)
-        ldloimminst = ROM4(1 << 8)(inst[12:16])
-        #ldhiimminst = ROM4(1 << 9)(inst[12:16])
-        ldinst =    ROM4(1 << 10)(inst[12:16])
-        stinst =    ROM4(1 << 11)(inst[12:16])
+        ldloimminst = ROM4(1 << 8)(insttype)
+        #ldhiimminst = ROM4(1 << 9)(insttype)
+        ldinst =    ROM4(1 << 10)(insttype)
+        stinst =    ROM4(1 << 11)(insttype)
         # make this a ROM
         ld = Or(2)(ldinst, ldloimminst)
 
-        # control flow instructions
-        jumpinst = ROM4(1 << 12)(inst[12:16])
-        #callinst = ROM4(1 << 13)(inst[12:16])
-        #retinst = ROM4(1 << 14)(inst[12:16])
-
-        always = Decode(15, 4)(cc)
-
-        condz  = Decode(0, 4)(cc) #jz
-        condnz = Decode(1, 4)(cc) #jnz
-        jumpz = LUT3((I0&I2)|(I1&~I2))(condz, condnz, z)
-
-        # jump is jump always of jump cond 
-        cond = Or(2)(always, jumpz) 
-
-        jump = And(2)(jumpinst, cond)
+        jump = Cond()(insttype, cond, z, c)
 
         regwr = LUT4((I0|I1|I2)&I3)(aluinst, ldloimminst, ldinst, phase)
-        zwr =  And(2)(aluinst, phase)
         owr = And(2)(stinst, phase)
 
-        #wire(logicinst, io.logicinst)
+        zwr =  And(2)(aluinst, phase)
+        cwr =  And(2)(arithinst, phase)
+
         wire(arithinst, io.arith)
-        #wire(aluinst, io.aluinst)
-        #wire(ldloinst, io.ldloinst)
         wire(ldloimminst, io.ioimm)
         wire(ld, io.ld)
         wire(jump, io.jump)
+
         wire(regwr, io.regwr)
         wire(zwr, io.zwr)
+        wire(cwr, io.cwr)
         wire(owr, io.owr)
 
 def DefinePico(ADDRN, DATAN, debug=False):
@@ -101,7 +121,7 @@ def DefinePico(ADDRN, DATAN, debug=False):
     inst = pico.data
     I = pico.I
 
-    # romb's output is registered
+    # romb's output is registered, which requires two phases
     # phase=0
     #   fetch()
     # phase=1
@@ -115,13 +135,15 @@ def DefinePico(ADDRN, DATAN, debug=False):
     ra = inst[8:12]
     op = inst[12:14]
 
-    print('Building condition code registers')
+    print('Building condition z condition code register')
     z = DFF(has_ce=True)
 
+    print('Building condition c condition code register')
+    c = DFF(has_ce=True)
+
     print('Building instruction decoder')
-    arith, ioimm, ld, jump, \
-    regwr, zwr, owr = \
-        InstructionDecoder()(inst, phase, z)
+    arith, ioimm, ld, jump, regwr, zwr, cwr, owr = \
+        InstructionDecoder()(inst, phase, z, c)
 
     # sequencer
     print('Building sequencer')
@@ -135,21 +157,24 @@ def DefinePico(ADDRN, DATAN, debug=False):
 
     print('Building ALU')
     alu = ALU(N)
-    res = alu(raval, rbval, op, arith)
+    alu(raval, rbval, 0, op, arith)
 
+    print('Building IO Mux')
     regiomux = Mux(2, N)
     regiomux(I, imm, ioimm)  
 
     regimux = Mux(2, N)
-    regimux(res, regiomux, ld) 
+    regimux(alu.O, regiomux, ld) 
 
     regfile(ra, rb, ra, regimux, regwr)
 
-    # z flag
-
-    zval0 = Decode(0, N//2)(res[0:N//2])
-    zval1 = Decode(0, N//2)(res[N//2:N])
+    # compute z flag
+    zval0 = Decode(0, N//2)(alu.O[0:N//2])
+    zval1 = Decode(0, N//2)(alu.O[N//2:N])
     z(And(2)(zval0,zval1), CE=zwr)
+
+    # compute c flag
+    c(alu.COUT, CE=cwr)
 
     wire(imm, pico.port)
     wire(raval, pico.O)

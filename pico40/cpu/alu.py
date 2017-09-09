@@ -110,9 +110,11 @@ def DefineALU(n):
         name = 'ALU{}'.format(n)
         IO = ["A", In(T), 
               "B", In(T),
+              "CIN", In(Bit),
               "op", In(Bits(2)),
               "insttype", In(Bit),
-              "O", Out(T)]
+              "O", Out(T), 
+              "COUT", Out(Bit)]
 
         @classmethod
         def definition(io):
@@ -126,15 +128,15 @@ def DefineALU(n):
             mux = Mux(2, n)
 
             #print('Wiring logic unit')
-            logicres = logicunit(io.A, io.B, io.op[0], io.op[1])
+            logicunit(io.A, io.B, io.op[0], io.op[1])
 
             #print('Wiring arith unit')
-            arithres = arithunit(io.A, io.B, io.op[0], io.op[1])
-            wire(0, arithunit.CIN)
+            arithunit(io.A, io.B, io.op[0], io.op[1], io.CIN) # CIN=0
 
             #print('Wiring alumux')
-            res = mux(logicres, arithres, io.insttype)
+            res = mux(logicunit.O, arithunit.O, io.insttype)
             wire( res, io.O )
+            wire( arithunit.COUT, io.COUT)
 
     return _ALU
 
