@@ -4,8 +4,14 @@ from mantle.lattice.ice40 import ROMB
 from ..mem import read as readmem
 from .seq import Sequencer
 from .alu import ALU
-from .ram import DualRAM
 from .cond import Cond
+
+def ROM2(x):
+    return uncurry(LUT2(x))
+
+def ROM4(x):
+    return uncurry(LUT4(x))
+
 
 class InstructionDecoder(Circuit):
     IO = ['inst',      In(Bits(16)),
@@ -13,9 +19,9 @@ class InstructionDecoder(Circuit):
           'z',         In(Bit),
           'c',         In(Bit),
 
-          'arith',     Out(Bit),
-          'ioimm',     Out(Bit),
-          'ld',        Out(Bit),
+          'arithinst', Out(Bit),
+          'imminst',   Out(Bit),
+          'ioinst',    Out(Bit),
           'jump',      Out(Bit),
 
           'regwr',     Out(Bit),
@@ -49,15 +55,17 @@ class InstructionDecoder(Circuit):
 
         jump = Cond()(insttype, cond, z, c)
 
-        regwr = LUT4((I0|I1|I2)&I3)(aluinst, ldloimminst, ldinst, phase)
-        owr = And(2)(stinst, phase)
+        regwr = LUT3((I0|I1)&I2)(aluinst, ld, phase)
 
         zwr =  And(2)(aluinst, phase)
         cwr =  And(2)(arithinst, phase)
 
-        wire(arithinst, io.arith)
-        wire(ldloimminst, io.ioimm)
-        wire(ld, io.ld)
+        owr = And(2)(stinst, phase)
+
+        wire(arithinst, io.arithinst)
+        wire(ldloimminst, io.imminst)
+        wire(ldinst, io.ioinst)
+
         wire(jump, io.jump)
 
         wire(regwr, io.regwr)

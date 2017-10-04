@@ -67,7 +67,7 @@ def DefineArith(n):
         def definition(io):
             inv = Invert(n)
             mux = Mux(2,n)
-            add = AddC(n)
+            add = Add(n, True, True)
 
             # 
             # compute carry in to the adder

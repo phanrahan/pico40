@@ -1,17 +1,15 @@
 from magma import *
 from mantle import *
-from mantle.lattice.ice40 import ROMB
 from ..mem import read as readmem
 from .seq import Sequencer
 from .alu import ALU
-from .ram import DualRAM
 from .decoder import InstructionDecoder
 
 __all__ = ['Pico', 'DefinePico', 'INSTN']
 
 INSTN = 16
 
-def DefinePico(ADDRN, DATAN, debug=False):
+def DefinePico(ADDRN, DATAN, debug=None):
 
     N = DATAN
     assert N == 8
@@ -42,14 +40,14 @@ def DefinePico(ADDRN, DATAN, debug=False):
     ra = inst[8:12]
     op = inst[12:14]
 
-    print('Building condition z condition code register')
+    print('Building z condition code register')
     z = DFF(has_ce=True)
 
-    print('Building condition c condition code register')
+    print('Building c condition code register')
     c = DFF(has_ce=True)
 
     print('Building instruction decoder')
-    arith, ioimm, ld, jump, regwr, zwr, cwr, owr = \
+    arithinst, imminst, ioinst, jump, regwr, zwr, cwr, owr = \
         InstructionDecoder()(inst, phase, z, c)
 
     # sequencer
@@ -64,16 +62,17 @@ def DefinePico(ADDRN, DATAN, debug=False):
 
     print('Building ALU')
     alu = ALU(N)
-    alu(raval, rbval, 0, op, arith)
+    alu(raval, rbval, c.O, op, arithinst)
+
+    print('Building Result Mux')
+    resmux = Mux(2, N)
+    resmux(alu.O, imm, imminst) # either alu or immediate 
 
     print('Building IO Mux')
-    regiomux = Mux(2, N)
-    regiomux(I, imm, ioimm)  
+    regmux = Mux(2, N)
+    regmux(resmux, I, ioinst) # either result or IO
 
-    regimux = Mux(2, N)
-    regimux(alu.O, regiomux, ld) 
-
-    regfile(ra, rb, ra, regimux, regwr)
+    regfile(ra, rb, ra, regmux, regwr)
 
     # compute z flag
     zval0 = Decode(0, N//2)(alu.O[0:N//2])
@@ -84,13 +83,37 @@ def DefinePico(ADDRN, DATAN, debug=False):
     c(alu.COUT, CE=cwr)
 
     wire(imm, pico.port)
-    wire(raval, pico.O)
     wire(owr, pico.we)
     wire(pc, pico.addr)
+
+    if debug in ['instlo', 'insthi', 'inst', 'raval', 'rbval', 'logic', 'arith', 'alu',
+            'reg', 'flags']:
+        debugmux = Mux(2,N)
+        if   debug == 'instlo':
+            debugout = inst[0:8]
+        elif debug == 'insthi' or debug == 'inst':
+            debugout = inst[8:16]
+        elif debug == 'raval':
+            debugout = raval
+        elif debug == 'rbval':
+            debugout = rbval
+        elif debug == 'logic':
+            debugout = logic.O
+        elif debug == 'arith':
+            debugout = arith.O
+        elif debug == 'alu':
+            debugout = alu.O
+        elif debug == 'reg':
+            debugout = regmux.O
+        elif debug == 'flags':
+            debugout = array([z.O,c.O,0,0,0,0,0,0])
+        wire( debugmux( pc, debugout, phase ), pico.O )
+    else:
+        wire(raval, pico.O)
 
     EndCircuit()
 
     return pico
 
-def Pico(ADDRN, DATAN, debug=False, **kwargs):
+def Pico(ADDRN, DATAN, debug=None, **kwargs):
     return DefinePico(ADDRN, DATAN, debug=debug)(**kwargs)

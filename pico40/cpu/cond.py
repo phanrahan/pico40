@@ -3,6 +3,9 @@ from mantle import *
 
 __all__ = ['Cond']
 
+def ROM4(x):
+    return uncurry(LUT4(x))
+
 class Cond(Circuit):
     IO = ["inst", In(Bits(4)), 
           "cond", In(Bits(4)),

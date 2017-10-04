@@ -22,7 +22,7 @@ for i in range(DATAN):
 main = icestick.main()
 
 # program memory
-romb = ROMB(mem)
+romb = ROMB(len(mem), 16, mem)
 wire( 1, romb.RE )
 
 inst = romb.RDATA
